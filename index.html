@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Offline Music PWA</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #121212;
+      color: white;
+      text-align: center;
+      padding: 2rem;
+    }
+    input {
+      margin-bottom: 1rem;
+    }
+    audio {
+      width: 100%;
+      margin-top: 1rem;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      margin: 10px 0;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Offline Music Player</h1>
+  <input type="file" id="fileInput" accept="audio/*" multiple />
+  <ul id="trackList"></ul>
+  <audio id="audioPlayer" controls></audio>  <script>
+    const fileInput = document.getElementById('fileInput');
+    const trackList = document.getElementById('trackList');
+    const audioPlayer = document.getElementById('audioPlayer');
+
+    const dbName = 'musicDB';
+    let db;
+
+    window.onload = async () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+      }
+
+      const request = indexedDB.open(dbName, 1);
+
+      request.onerror = (event) => {
+        console.error('IndexedDB error:', event);
+      };
+
+      request.onsuccess = (event) => {
+        db = event.target.result;
+        loadTracks();
+      };
+
+      request.onupgradeneeded = (event) => {
+        db = event.target.result;
+        db.createObjectStore('tracks', { keyPath: 'name' });
+      };
+    };
+
+    fileInput.addEventListener('change', async (event) => {
+      const files = event.target.files;
+      const transaction = db.transaction(['tracks'], 'readwrite');
+      const store = transaction.objectStore('tracks');
+
+      for (let file of files) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const track = { name: file.name, data: e.target.result };
+          store.put(track);
+          loadTracks();
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    function loadTracks() {
+      const transaction = db.transaction(['tracks'], 'readonly');
+      const store = transaction.objectStore('tracks');
+      const request = store.getAll();
+
+      request.onsuccess = (event) => {
+        const tracks = event.target.result;
+        trackList.innerHTML = '';
+        tracks.forEach((track) => {
+          const li = document.createElement('li');
+          li.textContent = track.name;
+          li.onclick = () => {
+            audioPlayer.src = track.data;
+            audioPlayer.play();
+          };
+          trackList.appendChild(li);
+        });
+      };
+    }
+  </script></body>
+</html>
